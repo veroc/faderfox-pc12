@@ -1,0 +1,964 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Faderfox PC12 Editor</title>
+<style>
+:root {
+  --bg: #111118;
+  --panel: #1a1a28;
+  --panel-border: #2a2a40;
+  --accent: #00e676;
+  --accent-dim: #00a854;
+  --red: #ff4060;
+  --yellow: #ffc107;
+  --blue: #42a5f5;
+  --text: #e0e0e0;
+  --text-dim: #777;
+  --cell-bg: #22223a;
+  --cell-hover: #2e2e50;
+  --cell-selected: #003322;
+  --cell-selected-border: #00e676;
+  --btn-bg: #1e1e36;
+  --btn-border: #3a3a5a;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: 'Inter', 'SF Pro', -apple-system, sans-serif; background: var(--bg); color: var(--text); overflow-x: hidden; }
+
+/* Header */
+.header { display: flex; align-items: center; justify-content: space-between; padding: 12px 20px; border-bottom: 1px solid var(--panel-border); background: var(--panel); }
+.header h1 { font-size: 1.1em; font-weight: 600; letter-spacing: 0.5px; }
+.header h1 span { color: var(--accent); }
+.header-right { display: flex; align-items: center; gap: 12px; }
+
+/* Status */
+.status-dot { width: 8px; height: 8px; border-radius: 50%; background: #555; display: inline-block; }
+.status-dot.connected { background: var(--accent); box-shadow: 0 0 6px var(--accent); }
+.status-dot.error { background: var(--red); }
+.status-text { font-size: 0.78em; color: var(--text-dim); }
+
+/* Toolbar */
+.toolbar { display: flex; align-items: center; gap: 8px; padding: 10px 20px; border-bottom: 1px solid var(--panel-border); background: var(--panel); flex-wrap: wrap; }
+.toolbar-group { display: flex; align-items: center; gap: 6px; }
+.toolbar-group::after { content: ''; width: 1px; height: 24px; background: var(--panel-border); margin: 0 6px; }
+.toolbar-group:last-child::after { display: none; }
+
+button, select {
+  font-family: inherit; font-size: 0.78em;
+  background: var(--btn-bg); color: var(--text); border: 1px solid var(--btn-border);
+  padding: 5px 12px; border-radius: 4px; cursor: pointer; white-space: nowrap;
+}
+button:hover { background: #2a2a4a; border-color: #5a5a7a; }
+button:active { background: #333358; }
+button.primary { border-color: var(--accent-dim); color: var(--accent); }
+button.primary:hover { background: #003322; }
+button.danger { border-color: #662233; color: var(--red); }
+select { padding-right: 24px; }
+select:focus, button:focus { outline: 1px solid var(--accent); outline-offset: 1px; }
+label { font-size: 0.78em; color: var(--text-dim); }
+
+/* Main layout */
+.main { display: flex; height: calc(100vh - 90px); }
+.grid-panel { flex: 1; overflow: auto; padding: 16px; }
+.edit-panel { width: 320px; min-width: 320px; border-left: 1px solid var(--panel-border); background: var(--panel); overflow-y: auto; }
+
+/* Grid */
+.grid-container { display: flex; flex-direction: column; gap: 2px; min-width: fit-content; }
+.grid-row { display: flex; gap: 2px; align-items: center; }
+.row-label { width: 28px; text-align: center; font-size: 0.72em; font-weight: 600; color: var(--text-dim); flex-shrink: 0; }
+.col-labels { display: flex; gap: 2px; padding-left: 30px; margin-bottom: 2px; }
+.col-label { width: 82px; text-align: center; font-size: 0.68em; color: var(--text-dim); flex-shrink: 0; }
+
+.cell {
+  width: 82px; height: 72px; border-radius: 4px;
+  background: var(--cell-bg); border: 1px solid transparent;
+  cursor: pointer; padding: 3px 5px; position: relative;
+  display: flex; flex-direction: column; justify-content: center; align-items: center;
+  transition: background 0.1s, border-color 0.1s; flex-shrink: 0; gap: 1px;
+}
+.cell:hover { background: var(--cell-hover); }
+.cell.selected { background: var(--cell-selected); border-color: var(--cell-selected-border); }
+.cell .cc { font-size: 0.82em; font-weight: 600; color: var(--text); line-height: 1.2; }
+.cell .ch { font-size: 0.6em; color: var(--text-dim); line-height: 1.1; }
+.cell .range { font-size: 0.56em; color: var(--yellow); line-height: 1.1; opacity: 0.8; }
+.cell .mode-label { font-size: 0.52em; color: #aa88cc; line-height: 1.1; }
+.cell .type-badge {
+  position: absolute; top: 2px; right: 3px;
+  font-size: 0.5em; padding: 0 3px; border-radius: 2px;
+  background: #2a2a4a; color: var(--blue); font-weight: 600;
+}
+.cell.is-button { background: #1a2a22; }
+.cell.is-button:hover { background: #223a2e; }
+.cell.is-button.selected { background: #003322; }
+.cell.is-encoder { background: #2a1a2a; }
+.cell.is-encoder:hover { background: #3a223a; }
+.cell.is-encoder.selected { background: #330033; border-color: #cc44cc; }
+
+/* Encoder row */
+.encoder-row { display: flex; gap: 2px; align-items: center; margin-top: 8px; }
+
+/* Edit panel */
+.edit-header { padding: 14px 16px; border-bottom: 1px solid var(--panel-border); }
+.edit-header h2 { font-size: 0.9em; font-weight: 600; }
+.edit-header .edit-subtitle { font-size: 0.72em; color: var(--text-dim); margin-top: 2px; }
+.edit-body { padding: 16px; }
+.edit-empty { padding: 40px 20px; text-align: center; color: var(--text-dim); font-size: 0.85em; }
+
+.field { margin-bottom: 14px; }
+.field label { display: block; margin-bottom: 4px; font-size: 0.75em; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.5px; }
+.field select, .field input {
+  width: 100%; padding: 7px 10px; font-size: 0.85em;
+  background: var(--bg); border: 1px solid var(--panel-border); color: var(--text);
+  border-radius: 4px;
+}
+.field input[type="number"] { -moz-appearance: textfield; }
+.field input[type="number"]::-webkit-inner-spin-button { opacity: 1; }
+.field-row { display: flex; gap: 10px; }
+.field-row .field { flex: 1; }
+
+.field-note { font-size: 0.7em; color: var(--text-dim); margin-top: 3px; }
+
+/* Log */
+.log-toggle { position: fixed; bottom: 10px; right: 10px; z-index: 100; font-size: 0.72em; padding: 4px 10px; }
+.log-panel {
+  position: fixed; bottom: 0; left: 0; right: 0; height: 160px;
+  background: var(--panel); border-top: 1px solid var(--panel-border);
+  display: none; z-index: 99; font-family: 'SF Mono', 'Fira Code', monospace;
+}
+.log-panel.open { display: block; }
+.log-panel .log-header { display: flex; justify-content: space-between; align-items: center; padding: 6px 12px; border-bottom: 1px solid var(--panel-border); }
+.log-panel .log-header span { font-size: 0.75em; font-weight: 600; }
+.log-content { padding: 8px 12px; overflow-y: auto; height: calc(100% - 32px); font-size: 0.72em; line-height: 1.6; }
+.log-content .info { color: var(--accent); }
+.log-content .warn { color: var(--yellow); }
+.log-content .error { color: var(--red); }
+.log-content .midi { color: var(--blue); }
+
+/* Responsive */
+@media (max-width: 900px) {
+  .main { flex-direction: column; height: auto; }
+  .edit-panel { width: 100%; min-width: 0; border-left: none; border-top: 1px solid var(--panel-border); }
+  .grid-panel { overflow-x: auto; }
+}
+</style>
+</head>
+<body>
+
+<div class="header">
+  <h1><span>Faderfox</span> PC12 Editor</h1>
+  <div class="header-right">
+    <span class="status-dot" id="statusDot"></span>
+    <span class="status-text" id="statusText">Not connected</span>
+  </div>
+</div>
+
+<div class="toolbar">
+  <div class="toolbar-group">
+    <label>MIDI In:</label>
+    <select id="midiIn"><option value="">--</option></select>
+    <label>Out:</label>
+    <select id="midiOut"><option value="">--</option></select>
+    <button onclick="initMidi()">Refresh</button>
+  </div>
+  <div class="toolbar-group">
+    <label>Setup:</label>
+    <select id="setupSelect"></select>
+  </div>
+  <div class="toolbar-group">
+    <button class="primary" onclick="requestDump()">Receive from Device</button>
+    <button class="primary" onclick="sendToDevice()">Send to Device</button>
+  </div>
+  <div class="toolbar-group">
+    <button onclick="exportFile()">Export .syx</button>
+    <button onclick="exportJSON()">Export JSON</button>
+    <button onclick="document.getElementById('importFile').click()">Import</button>
+    <input type="file" id="importFile" accept=".syx,.json,.bin" style="display:none" onchange="importFile(event)">
+  </div>
+  <div class="toolbar-group">
+    <button class="danger" onclick="factoryReset()">Reset Setup</button>
+  </div>
+</div>
+
+<div class="main">
+  <div class="grid-panel">
+    <div class="col-labels" id="colLabels"></div>
+    <div class="grid-container" id="grid"></div>
+  </div>
+  <div class="edit-panel" id="editPanel">
+    <div class="edit-empty">Click a control to edit its parameters</div>
+  </div>
+</div>
+
+<button class="log-toggle" onclick="toggleLog()">Log</button>
+<div class="log-panel" id="logPanel">
+  <div class="log-header"><span>Log</span><button onclick="toggleLog()">Close</button></div>
+  <div class="log-content" id="logContent"></div>
+</div>
+
+<script>
+// ============================================================
+// Data Model
+// ============================================================
+
+const ROWS = ['A','B','C','D','E','F'];
+const ROW_G = 'G';
+const COLS = 12;
+
+const POTI_TYPES = [
+  { id: 0, name: 'Note', label: 'NOTE' },
+  { id: 1, name: 'CC Relative 1', label: 'CCr1' },
+  { id: 2, name: 'CC Absolute', label: 'CC' },
+  { id: 3, name: 'Program Change', label: 'PrGC' },
+  { id: 4, name: 'Pitchbend', label: 'PBnd' },
+  { id: 5, name: 'Aftertouch', label: 'AFtt' },
+  { id: 6, name: 'CC 14-bit (MSB/LSB)', label: 'CC14' },
+  { id: 7, name: 'Pitchbend 14-bit', label: 'PB14' },
+];
+
+const ENCODER_TYPES = [
+  { id: 0, name: 'Note', label: 'NOTE' },
+  { id: 1, name: 'CC Relative 1 (1/127)', label: 'CCr1' },
+  { id: 2, name: 'CC Relative 2 (63/65)', label: 'CCr2' },
+  { id: 3, name: 'CC Absolute', label: 'CCAb' },
+  { id: 4, name: 'Program Change', label: 'PrGC' },
+  { id: 5, name: 'CC 14-bit (MSB/LSB)', label: 'CC14' },
+  { id: 6, name: 'Pitchbend 14-bit', label: 'PB14' },
+  { id: 7, name: 'Aftertouch', label: 'AFtt' },
+];
+
+const BUTTON_TYPES = [
+  { id: 0, name: 'Note', label: 'NOTE' },
+  { id: 2, name: 'CC', label: 'CC' },
+  { id: 3, name: 'Program Change', label: 'PrGC' },
+  { id: 5, name: 'Aftertouch', label: 'AFtt' },
+];
+
+const POTI_MODES = [
+  { id: 0, name: 'Jump' },
+  { id: 1, name: 'Snap' },
+];
+
+const ENCODER_MODES = [
+  { id: 0, name: 'Acc 0 (no acceleration)' },
+  { id: 1, name: 'Acc 1 (low)' },
+  { id: 2, name: 'Acc 2 (medium)' },
+  { id: 3, name: 'Acc 3 (high)' },
+];
+
+const BUTTON_MODES = [
+  { id: 0, name: 'Momentary (btn)' },
+  { id: 2, name: 'Toggle (toGL)' },
+];
+
+const POTI_SCALES = [
+  { id: 0, name: 'OFF' },
+  { id: 1, name: 'Standard (0-127)' },
+  { id: 2, name: 'Bipolar (-63 to 63)' },
+];
+
+const BUTTON_SCALES = [
+  { id: 0, name: 'OFF' },
+  { id: 1, name: 'Standard' },
+  { id: 2, name: 'External (Ext)' },
+];
+
+// Setup data: 8 blocks × 64 bytes
+let setupData = createDefaultSetup();
+let selectedControl = null;
+let currentSetup = 1;
+
+function createDefaultSetup() {
+  // Factory default for setups 1-20: unique CC numbers, same channel
+  const data = new Array(8).fill(null).map(() => new Uint8Array(64));
+
+  // Rows A-F (blocks 0-5): potis with CC 1-72
+  for (let row = 0; row < 6; row++) {
+    for (let col = 0; col < 12; col++) {
+      const offset = col * 5;
+      const ccNum = row * 12 + col + 1; // CC001-CC072
+      data[row][offset + 0] = 0;    // channel 0 (ch1)
+      data[row][offset + 1] = ccNum; // CC number
+      data[row][offset + 2] = 0;    // lower = 0
+      data[row][offset + 3] = 127;  // upper = 127
+      data[row][offset + 4] = 0x21; // CC-abs, Jump, Std
+    }
+  }
+
+  // Row G (block 6): buttons CC073-CC084 toggle mode
+  for (let col = 0; col < 12; col++) {
+    const offset = col * 5;
+    data[6][offset + 0] = 0;         // channel
+    data[6][offset + 1] = 73 + col;  // CC073-084
+    data[6][offset + 2] = 0;         // lower
+    data[6][offset + 3] = 127;       // upper
+    data[6][offset + 4] = 0x2A;      // CC-abs, toggle, Ext
+  }
+
+  // Block 7: Encoder + Push button
+  data[7][0] = 0;    // ch
+  data[7][1] = 85;   // CC085
+  data[7][2] = 0;    // lower
+  data[7][3] = 127;  // upper
+  data[7][4] = 0x3A; // CCAb, Acc2, bPol
+
+  data[7][5] = 0;    // ch
+  data[7][6] = 86;   // CC086
+  data[7][7] = 0;    // lower
+  data[7][8] = 127;  // upper
+  data[7][9] = 0x02; // Note, btn, bPol
+
+  // Fill rest of block 7 with 0xFF
+  for (let i = 10; i < 64; i++) data[7][i] = 0xFF;
+
+  return data;
+}
+
+function getControl(block, index) {
+  const off = index * 5;
+  const d = setupData[block];
+  return {
+    channel: d[off + 0],
+    number: d[off + 1],
+    lower: d[off + 2],
+    upper: d[off + 3],
+    flags: d[off + 4],
+    type: (d[off + 4] >> 4) & 0x0F,
+    mode: (d[off + 4] >> 2) & 0x03,
+    scale: d[off + 4] & 0x03,
+  };
+}
+
+function setControl(block, index, ctrl) {
+  const off = index * 5;
+  const d = setupData[block];
+  d[off + 0] = ctrl.channel & 0xFF;
+  d[off + 1] = ctrl.number & 0x7F;
+  d[off + 2] = ctrl.lower & 0xFF;
+  d[off + 3] = ctrl.upper & 0xFF;
+  d[off + 4] = ((ctrl.type & 0x0F) << 4) | ((ctrl.mode & 0x03) << 2) | (ctrl.scale & 0x03);
+}
+
+function getControlKind(block, index) {
+  if (block < 6) return 'poti';
+  if (block === 6) return 'button';
+  if (block === 7 && index === 0) return 'encoder';
+  if (block === 7 && index === 1) return 'pushbutton';
+  return 'unused';
+}
+
+function getControlName(block, index) {
+  if (block < 6) return `Poti ${ROWS[block]}${index + 1}`;
+  if (block === 6) return `Button G${index + 1}`;
+  if (block === 7 && index === 0) return 'Encoder';
+  if (block === 7 && index === 1) return 'Encoder Push';
+  return `Block ${block} [${index}]`;
+}
+
+// ============================================================
+// SysEx Encoding / Decoding
+// ============================================================
+
+function encodeTriplet(tag, value) {
+  const tagByte = 0x40 | (tag.charCodeAt(0) - 0x40);
+  const hi = 0x20 | ((value >> 4) & 0x0F);
+  const lo = 0x10 | (value & 0x0F);
+  return [tagByte, hi, lo];
+}
+
+function decodeTriplet(b1, b2, b3) {
+  return ((b2 & 0x0F) << 4) | (b3 & 0x0F);
+}
+
+const BLOCK_ADDRESSES = [
+  { I: 0x02, J: 0x00 },
+  { I: 0x02, J: 0x40 },
+  { I: 0x02, J: 0x80 },
+  { I: 0x02, J: 0xC0 },
+  { I: 0x03, J: 0x00 },
+  { I: 0x03, J: 0x40 },
+  { I: 0x03, J: 0x80 },
+  { I: 0x03, J: 0xC0 },
+];
+
+function buildSysex() {
+  const out = [];
+
+  // Header
+  out.push(0xF0, 0x00, 0x00, 0x00);
+  out.push(...encodeTriplet('A', 0x0A)); // A=10
+  out.push(...encodeTriplet('B', 0x02)); // B=2
+  out.push(...encodeTriplet('C', currentSetup)); // C=setup number
+  out.push(...encodeTriplet('D', 0x04)); // D=4
+
+  // 8 blocks
+  for (let b = 0; b < 8; b++) {
+    const addr = BLOCK_ADDRESSES[b];
+    out.push(...encodeTriplet('I', addr.I));
+    out.push(...encodeTriplet('J', addr.J));
+
+    let checksum = 0;
+    for (let d = 0; d < 64; d++) {
+      const val = setupData[b][d];
+      out.push(...encodeTriplet('M', val));
+      checksum += val;
+    }
+
+    out.push(...encodeTriplet('K', (checksum >> 8) & 0xFF));
+    out.push(...encodeTriplet('L', checksum & 0xFF));
+
+    // 30 zero padding
+    for (let p = 0; p < 30; p++) out.push(0x00);
+  }
+
+  // Footer
+  out.push(...encodeTriplet('O', 0x0A));
+  out.push(0xF7);
+
+  return new Uint8Array(out);
+}
+
+function parseSysex(data) {
+  if (data[0] !== 0xF0 || data[data.length - 1] !== 0xF7) {
+    throw new Error('Invalid SysEx: missing F0/F7');
+  }
+
+  let pos = 1;
+
+  // Skip 00 00 00 header
+  if (data[pos] === 0x00 && data[pos+1] === 0x00 && data[pos+2] === 0x00) {
+    pos += 3;
+  }
+
+  // Read header fields A, B, C, D
+  const headerA = decodeTriplet(data[pos], data[pos+1], data[pos+2]); pos += 3;
+  const headerB = decodeTriplet(data[pos], data[pos+1], data[pos+2]); pos += 3;
+  const headerC = decodeTriplet(data[pos], data[pos+1], data[pos+2]); pos += 3;
+  const headerD = decodeTriplet(data[pos], data[pos+1], data[pos+2]); pos += 3;
+
+  log(`Header: A=${headerA} B=${headerB} C=${headerC} D=${headerD}`, 'info');
+  currentSetup = headerC;
+  document.getElementById('setupSelect').value = currentSetup;
+
+  // Read 8 blocks
+  const newData = new Array(8).fill(null).map(() => new Uint8Array(64));
+  let allChecksumOk = true;
+
+  for (let b = 0; b < 8; b++) {
+    const iVal = decodeTriplet(data[pos], data[pos+1], data[pos+2]); pos += 3;
+    const jVal = decodeTriplet(data[pos], data[pos+1], data[pos+2]); pos += 3;
+
+    let checksum = 0;
+    for (let d = 0; d < 64; d++) {
+      const val = decodeTriplet(data[pos], data[pos+1], data[pos+2]);
+      newData[b][d] = val;
+      checksum += val;
+      pos += 3;
+    }
+
+    const kVal = decodeTriplet(data[pos], data[pos+1], data[pos+2]); pos += 3;
+    const lVal = decodeTriplet(data[pos], data[pos+1], data[pos+2]); pos += 3;
+    const storedChecksum = (kVal << 8) | lVal;
+
+    if (storedChecksum !== checksum) {
+      log(`Block ${b} checksum MISMATCH: stored=0x${storedChecksum.toString(16)} computed=0x${checksum.toString(16)}`, 'error');
+      allChecksumOk = false;
+    }
+
+    // Skip 30 zero padding
+    pos += 30;
+  }
+
+  if (allChecksumOk) {
+    log('All 8 block checksums verified OK', 'info');
+  }
+
+  setupData = newData;
+  renderGrid();
+  if (selectedControl) showEditor(selectedControl.block, selectedControl.index);
+}
+
+// ============================================================
+// MIDI
+// ============================================================
+
+let midiAccess = null;
+let midiInput = null;
+let midiOutput = null;
+let capturing = false;
+let captureBuffer = [];
+
+async function initMidi() {
+  try {
+    midiAccess = await navigator.requestMIDIAccess({ sysex: true });
+    log('Web MIDI access granted (SysEx enabled)', 'info');
+    populatePorts();
+    midiAccess.onstatechange = () => populatePorts();
+    setStatus('connected', 'MIDI available');
+  } catch (e) {
+    log('MIDI access failed: ' + e.message, 'error');
+    setStatus('error', 'MIDI unavailable');
+  }
+}
+
+function populatePorts() {
+  const inSel = document.getElementById('midiIn');
+  const outSel = document.getElementById('midiOut');
+  const prevIn = inSel.value, prevOut = outSel.value;
+
+  inSel.innerHTML = '<option value="">--</option>';
+  outSel.innerHTML = '<option value="">--</option>';
+
+  for (const [id, p] of midiAccess.inputs) {
+    const o = new Option(`${p.name}`, id);
+    inSel.appendChild(o);
+    if (id === prevIn || p.name.toLowerCase().includes('faderfox')) inSel.value = id;
+  }
+  for (const [id, p] of midiAccess.outputs) {
+    const o = new Option(`${p.name}`, id);
+    outSel.appendChild(o);
+    if (id === prevOut || p.name.toLowerCase().includes('faderfox')) outSel.value = id;
+  }
+
+  attachInput();
+}
+
+function attachInput() {
+  if (midiInput) midiInput.onmidimessage = null;
+  const id = document.getElementById('midiIn').value;
+  if (!id || !midiAccess) return;
+  midiInput = midiAccess.inputs.get(id);
+  if (midiInput) {
+    midiInput.onmidimessage = onMidiMessage;
+    log(`Listening on: ${midiInput.name}`, 'info');
+    setStatus('connected', midiInput.name);
+  }
+}
+
+document.getElementById('midiIn').onchange = attachInput;
+
+function getOutput() {
+  const id = document.getElementById('midiOut').value;
+  if (!id || !midiAccess) { log('No MIDI output selected', 'warn'); return null; }
+  return midiAccess.outputs.get(id);
+}
+
+function onMidiMessage(event) {
+  if (event.data[0] === 0xF0) {
+    const arr = Array.from(event.data);
+    log(`SysEx received: ${arr.length} bytes`, 'midi');
+    try {
+      parseSysex(arr);
+      log('Setup data loaded from device', 'info');
+    } catch (e) {
+      log('Parse error: ' + e.message, 'error');
+    }
+  }
+}
+
+function requestDump() {
+  log('Waiting for SysEx dump from device...', 'info');
+  log('On PC12: Setup Mode → Taste 7 (Send) → hold Sndc or SndA', 'warn');
+}
+
+function sendToDevice() {
+  const out = getOutput();
+  if (!out) return;
+  const syx = buildSysex();
+  log(`Sending setup ${currentSetup} to device (${syx.length} bytes)...`, 'info');
+  out.send(syx);
+  log('SysEx sent. Device should be in Receive mode (Taste 8).', 'info');
+}
+
+function setStatus(state, text) {
+  const dot = document.getElementById('statusDot');
+  dot.className = 'status-dot ' + (state === 'connected' ? 'connected' : state === 'error' ? 'error' : '');
+  document.getElementById('statusText').textContent = text;
+}
+
+// ============================================================
+// Grid Rendering
+// ============================================================
+
+function renderGrid() {
+  const grid = document.getElementById('grid');
+  const colLabels = document.getElementById('colLabels');
+
+  colLabels.innerHTML = '';
+  for (let c = 0; c < 12; c++) {
+    colLabels.innerHTML += `<div class="col-label">${c + 1}</div>`;
+  }
+
+  grid.innerHTML = '';
+
+  // Poti rows A-F
+  for (let r = 0; r < 6; r++) {
+    const row = document.createElement('div');
+    row.className = 'grid-row';
+    row.innerHTML = `<div class="row-label">${ROWS[r]}</div>`;
+    for (let c = 0; c < 12; c++) {
+      row.appendChild(createCell(r, c, 'poti'));
+    }
+    grid.appendChild(row);
+  }
+
+  // Button row G
+  const btnRow = document.createElement('div');
+  btnRow.className = 'grid-row';
+  btnRow.style.marginTop = '6px';
+  btnRow.innerHTML = `<div class="row-label">G</div>`;
+  for (let c = 0; c < 12; c++) {
+    btnRow.appendChild(createCell(6, c, 'button'));
+  }
+  grid.appendChild(btnRow);
+
+  // Encoder row
+  const encRow = document.createElement('div');
+  encRow.className = 'grid-row encoder-row';
+  encRow.innerHTML = `<div class="row-label">Enc</div>`;
+  encRow.appendChild(createCell(7, 0, 'encoder'));
+  encRow.appendChild(createCell(7, 1, 'pushbutton'));
+  grid.appendChild(encRow);
+
+  updateGridSelection();
+}
+
+function createCell(block, index, kind) {
+  const ctrl = getControl(block, index);
+  const cell = document.createElement('div');
+  cell.className = 'cell' + (kind === 'button' ? ' is-button' : kind === 'encoder' || kind === 'pushbutton' ? ' is-encoder' : '');
+  cell.dataset.block = block;
+  cell.dataset.index = index;
+
+  if (ctrl.flags === 0xFF) {
+    cell.innerHTML = `<span class="cc" style="color:#555">--</span>`;
+  } else {
+    const types = kind === 'encoder' || kind === 'pushbutton' ? ENCODER_TYPES : kind === 'button' ? BUTTON_TYPES : POTI_TYPES;
+    const modes = kind === 'encoder' ? ENCODER_MODES : kind === 'button' || kind === 'pushbutton' ? BUTTON_MODES : POTI_MODES;
+    const typeDef = types.find(t => t.id === ctrl.type) || { label: '?' };
+    const modeDef = modes.find(m => m.id === ctrl.mode) || { name: '?' };
+
+    let numLabel;
+    if (ctrl.type === 0) numLabel = noteToName(ctrl.number);
+    else numLabel = ctrl.number;
+
+    // Short mode name for cell display
+    const modeShort = kind === 'encoder'
+      ? ['Acc0','Acc1','Acc2','Acc3'][ctrl.mode] || '?'
+      : kind === 'button' || kind === 'pushbutton'
+        ? (ctrl.mode === 2 ? 'Togl' : 'Mom')
+        : (ctrl.mode === 1 ? 'Snap' : 'Jump');
+
+    cell.innerHTML = `
+      <span class="type-badge">${typeDef.label}</span>
+      <span class="cc">${numLabel}</span>
+      <span class="ch">Ch ${ctrl.channel + 1}</span>
+      <span class="range">${ctrl.lower}–${ctrl.upper}</span>
+      <span class="mode-label">${modeShort}</span>
+    `;
+  }
+
+  cell.onclick = () => selectControl(block, index);
+  return cell;
+}
+
+function noteToName(n) {
+  const names = ['C','C#','D','D#','E','F','F#','G','G#','A','A#','B'];
+  return names[n % 12] + (Math.floor(n / 12) - 2);
+}
+
+function selectControl(block, index) {
+  selectedControl = { block, index };
+  updateGridSelection();
+  showEditor(block, index);
+}
+
+function updateGridSelection() {
+  document.querySelectorAll('.cell').forEach(c => {
+    const b = parseInt(c.dataset.block);
+    const i = parseInt(c.dataset.index);
+    c.classList.toggle('selected',
+      selectedControl && selectedControl.block === b && selectedControl.index === i);
+  });
+}
+
+// ============================================================
+// Editor Panel
+// ============================================================
+
+function showEditor(block, index) {
+  const panel = document.getElementById('editPanel');
+  const ctrl = getControl(block, index);
+  const kind = getControlKind(block, index);
+  const name = getControlName(block, index);
+
+  if (ctrl.flags === 0xFF) {
+    panel.innerHTML = `<div class="edit-empty">Unused slot</div>`;
+    return;
+  }
+
+  const types = kind === 'encoder' ? ENCODER_TYPES : kind === 'button' || kind === 'pushbutton' ? BUTTON_TYPES : POTI_TYPES;
+  const modes = kind === 'encoder' ? ENCODER_MODES : kind === 'button' || kind === 'pushbutton' ? BUTTON_MODES : POTI_MODES;
+  const scales = kind === 'button' || kind === 'pushbutton' ? BUTTON_SCALES : POTI_SCALES;
+
+  panel.innerHTML = `
+    <div class="edit-header">
+      <h2>${name}</h2>
+      <div class="edit-subtitle">${kind.toUpperCase()} · Block ${block}, Index ${index}</div>
+    </div>
+    <div class="edit-body">
+      <div class="field">
+        <label>Command Type</label>
+        <select id="ed-type" onchange="onEditChange()">
+          ${types.map(t => `<option value="${t.id}" ${t.id === ctrl.type ? 'selected' : ''}>${t.name}</option>`).join('')}
+        </select>
+      </div>
+      <div class="field">
+        <label>MIDI Channel</label>
+        <select id="ed-channel" onchange="onEditChange()">
+          ${Array.from({length:16},(_,i) => `<option value="${i}" ${i === ctrl.channel ? 'selected' : ''}>Ch ${i+1}</option>`).join('')}
+        </select>
+      </div>
+      <div class="field">
+        <label>CC / Note Number</label>
+        <input type="number" id="ed-number" min="0" max="127" value="${ctrl.number}" onchange="onEditChange()">
+        <div class="field-note" id="ed-number-note">${ctrl.type === 0 ? noteToName(ctrl.number) : `CC ${ctrl.number}`}</div>
+      </div>
+      <div class="field-row">
+        <div class="field">
+          <label>Lower Value</label>
+          <input type="number" id="ed-lower" min="0" max="255" value="${ctrl.lower}" onchange="onEditChange()">
+        </div>
+        <div class="field">
+          <label>Upper Value</label>
+          <input type="number" id="ed-upper" min="0" max="255" value="${ctrl.upper}" onchange="onEditChange()">
+        </div>
+      </div>
+      <div class="field">
+        <label>Mode</label>
+        <select id="ed-mode" onchange="onEditChange()">
+          ${modes.map(m => `<option value="${m.id}" ${m.id === ctrl.mode ? 'selected' : ''}>${m.name}</option>`).join('')}
+        </select>
+      </div>
+      <div class="field">
+        <label>Display Scale</label>
+        <select id="ed-scale" onchange="onEditChange()">
+          ${scales.map(s => `<option value="${s.id}" ${s.id === ctrl.scale ? 'selected' : ''}>${s.name}</option>`).join('')}
+        </select>
+      </div>
+      <div class="field" style="margin-top: 20px; padding-top: 14px; border-top: 1px solid var(--panel-border);">
+        <label>Raw Flags Byte</label>
+        <div style="font-family: monospace; font-size: 0.85em; color: var(--blue);">
+          0x${ctrl.flags.toString(16).padStart(2,'0').toUpperCase()}
+          = type:${ctrl.type} mode:${ctrl.mode} scale:${ctrl.scale}
+        </div>
+      </div>
+      <div style="margin-top:14px; display:flex; gap:8px; flex-wrap:wrap;">
+        <button onclick="copyToRow()">Copy to Row</button>
+        <button onclick="copyToColumn()">Copy to Column</button>
+      </div>
+    </div>
+  `;
+}
+
+function onEditChange() {
+  if (!selectedControl) return;
+  const { block, index } = selectedControl;
+  const ctrl = {
+    channel: parseInt(document.getElementById('ed-channel').value),
+    number: parseInt(document.getElementById('ed-number').value),
+    lower: parseInt(document.getElementById('ed-lower').value),
+    upper: parseInt(document.getElementById('ed-upper').value),
+    type: parseInt(document.getElementById('ed-type').value),
+    mode: parseInt(document.getElementById('ed-mode').value),
+    scale: parseInt(document.getElementById('ed-scale').value),
+  };
+  setControl(block, index, ctrl);
+
+  // Update note display
+  const note = document.getElementById('ed-number-note');
+  if (note) note.textContent = ctrl.type === 0 ? noteToName(ctrl.number) : `CC ${ctrl.number}`;
+
+  renderGrid();
+}
+
+function copyToRow() {
+  if (!selectedControl) return;
+  const { block, index } = selectedControl;
+  const src = getControl(block, index);
+  const maxIdx = block === 7 ? 2 : 12;
+  for (let c = 0; c < maxIdx; c++) {
+    if (c === index) continue;
+    const existing = getControl(block, c);
+    if (existing.flags === 0xFF) continue;
+    setControl(block, c, { ...src, number: src.number + (c - index) });
+  }
+  renderGrid();
+  log(`Copied control settings across row (block ${block})`, 'info');
+}
+
+function copyToColumn() {
+  if (!selectedControl) return;
+  const { block, index } = selectedControl;
+  if (block >= 6) { log('Column copy only works for poti rows A-F', 'warn'); return; }
+  const src = getControl(block, index);
+  for (let r = 0; r < 6; r++) {
+    if (r === block) continue;
+    setControl(r, index, { ...src });
+  }
+  renderGrid();
+  log(`Copied control settings down column ${index + 1}`, 'info');
+}
+
+// ============================================================
+// File I/O
+// ============================================================
+
+function exportFile() {
+  const syx = buildSysex();
+  download(syx, `pc12-setup${currentSetup}-${Date.now()}.syx`, 'application/octet-stream');
+  log(`Exported .syx (${syx.length} bytes)`, 'info');
+}
+
+function exportJSON() {
+  const obj = {
+    device: 'Faderfox PC12',
+    setup: currentSetup,
+    exportDate: new Date().toISOString(),
+    blocks: setupData.map((block, i) => ({
+      index: i,
+      address: BLOCK_ADDRESSES[i],
+      controls: Array.from({ length: block === setupData[7] ? 2 : 12 }, (_, c) => {
+        const ctrl = getControl(i, c);
+        const kind = getControlKind(i, c);
+        return {
+          name: getControlName(i, c),
+          kind,
+          channel: ctrl.channel + 1,
+          number: ctrl.number,
+          lower: ctrl.lower,
+          upper: ctrl.upper,
+          type: ctrl.type,
+          mode: ctrl.mode,
+          scale: ctrl.scale,
+          flagsHex: '0x' + ctrl.flags.toString(16).padStart(2, '0'),
+        };
+      }),
+      rawHex: Array.from(block).map(b => b.toString(16).padStart(2, '0')).join(' '),
+    })),
+  };
+  download(JSON.stringify(obj, null, 2), `pc12-setup${currentSetup}-${Date.now()}.json`, 'application/json');
+  log('Exported JSON', 'info');
+}
+
+function importFile(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+
+  if (file.name.endsWith('.json')) {
+    reader.onload = (e) => {
+      try {
+        const data = JSON.parse(e.target.result);
+        if (data.blocks) {
+          for (let b = 0; b < 8 && b < data.blocks.length; b++) {
+            const hex = data.blocks[b].rawHex;
+            if (hex) {
+              const bytes = hex.split(' ').map(h => parseInt(h, 16));
+              setupData[b] = new Uint8Array(bytes);
+            }
+          }
+          if (data.setup) {
+            currentSetup = data.setup;
+            document.getElementById('setupSelect').value = currentSetup;
+          }
+          renderGrid();
+          log(`Imported JSON: ${file.name}`, 'info');
+        }
+      } catch (err) {
+        log('Import error: ' + err.message, 'error');
+      }
+    };
+    reader.readAsText(file);
+  } else {
+    reader.onload = (e) => {
+      const buf = new Uint8Array(e.target.result);
+      // Find first F0...F7
+      let start = buf.indexOf(0xF0);
+      if (start === -1) { log('No SysEx found in file', 'error'); return; }
+      let end = buf.indexOf(0xF7, start);
+      if (end === -1) { log('Incomplete SysEx in file', 'error'); return; }
+      const syx = Array.from(buf.slice(start, end + 1));
+      try {
+        parseSysex(syx);
+        log(`Imported from ${file.name} (${syx.length} bytes)`, 'info');
+      } catch (err) {
+        log('Parse error: ' + err.message, 'error');
+      }
+    };
+    reader.readAsArrayBuffer(file);
+  }
+  event.target.value = '';
+}
+
+function download(data, filename, type) {
+  const blob = (data instanceof Uint8Array) ? new Blob([data], { type }) : new Blob([data], { type });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = filename; a.click();
+  URL.revokeObjectURL(url);
+}
+
+function factoryReset() {
+  if (!confirm('Reset current setup to factory defaults?')) return;
+  setupData = createDefaultSetup();
+  renderGrid();
+  if (selectedControl) showEditor(selectedControl.block, selectedControl.index);
+  log('Setup reset to factory defaults', 'warn');
+}
+
+// ============================================================
+// Log
+// ============================================================
+
+function log(text, cls = 'info') {
+  const el = document.getElementById('logContent');
+  const line = document.createElement('div');
+  line.className = cls;
+  line.textContent = `[${new Date().toLocaleTimeString()}] ${text}`;
+  el.appendChild(line);
+  el.scrollTop = el.scrollHeight;
+}
+
+function toggleLog() {
+  document.getElementById('logPanel').classList.toggle('open');
+}
+
+// ============================================================
+// Init
+// ============================================================
+
+function init() {
+  // Setup selector
+  const sel = document.getElementById('setupSelect');
+  for (let i = 1; i <= 30; i++) {
+    sel.appendChild(new Option(`Setup ${i}`, i));
+  }
+  sel.value = 1;
+  sel.onchange = () => { currentSetup = parseInt(sel.value); };
+
+  renderGrid();
+
+  if (navigator.requestMIDIAccess) {
+    initMidi();
+  } else {
+    log('Web MIDI not supported. Use Chrome or Edge.', 'error');
+    setStatus('error', 'Web MIDI unsupported');
+  }
+}
+
+window.addEventListener('DOMContentLoaded', init);
+</script>
+
+</body>
+</html>
